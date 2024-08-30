@@ -27,6 +27,7 @@ class Producer(AMQPClient):
         amqp_url: str = "amqp://guest:guest@localhost:5672/",
         exchange: str = "default",
         exchange_type: str = "topic",
+        max_priority: int = 5,
     ):
         """
         Initialize the Producer instance and setup the exchange.
@@ -40,7 +41,10 @@ class Producer(AMQPClient):
         self.setup_exchange(exchange, exchange_type)
 
         # Declare a callback queue for receiving responses
-        result = self.channel.queue_declare(queue="", exclusive=True)
+        result = self.channel.queue_declare(
+            queue="", exclusive=True, arguments={"x-max-priority": max_priority}
+        )
+
         self.callback_queue = result.method.queue
 
         self.channel.basic_consume(
@@ -58,6 +62,7 @@ class Producer(AMQPClient):
         body: Union[dict, str],
         content_type: str = "application/json",
         delivery_mode: int = 2,
+        priority: int = 0,
     ):
         """
         Publish a message to the specified routing key on the AMQP broker.
@@ -73,8 +78,12 @@ class Producer(AMQPClient):
         - Exception: If there is an error during the message publishing process.
         """
         try:
+            # Note: I have added a priority parameter to the publish method, however I don't expect it
+            # to work until we have implemented Celery (pubsub) priorities.
             properties = pika.BasicProperties(
-                content_type=content_type, delivery_mode=delivery_mode
+                content_type=content_type,
+                delivery_mode=delivery_mode,
+                priority=priority,
             )
             self.channel.basic_publish(
                 exchange=self.exchange,
@@ -129,6 +138,7 @@ class Producer(AMQPClient):
             correlation_id=self.corr_id,
             content_type=content_type,
             delivery_mode=delivery_mode,
+            priority=5,
         )
         try:
             self.channel.basic_publish(
